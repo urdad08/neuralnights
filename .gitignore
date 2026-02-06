@@ -1,0 +1,18 @@
+*.mp4 *.avi *.mov *.mkv *.webm
+*.h5 *.pt *.pth *.ckpt *.safetensors
+dataset_2fps/
+engagement_4class/
+disengaged/
+distracted/
+highly_engaged/
+moderate/
+frames*/
+output*/
+__pycache__/
+dataset/
+dataset_2fps
+engagement_4class
+frames_100x100
+output_images
+output_images_complete
+rPPG-Toolbox
