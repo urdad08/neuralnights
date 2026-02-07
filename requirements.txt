@@ -1,0 +1,18 @@
+# ---------- Core Scientific Stack ----------
+numpy>=1.23,<2.3
+scipy>=1.9
+pandas>=1.5
+
+opencv-python>=4.7
+dlib>=19.24
+
+#  Plotting 
+matplotlib>=3.7
+
+# Deep Learning (for DeepPhys / PhysNet / TS-CAN) 
+tensorflow>=2.10,<2.21
+keras>=2.10
+
+# Utilities
+tqdm>=4.65
+scikit-learn>=1.2
