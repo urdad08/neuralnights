@@ -1,3 +1,145 @@
+import tensorflow as tf
+import numpy as np
+from sklearn.metrics import confusion_matrix, classification_report
+
+# ================= CONFIG =================
+DATA_DIR = "engagement_4class"   # ✅ ROOT FOLDER
+IMG_SIZE = (100, 100)
+BATCH_SIZE = 32
+EPOCHS = 1
+SEED = 42
+
+print("🚀 GPUs Available:", tf.config.list_physical_devices("GPU"))
+
+# ================= MIXED PRECISION =================
+tf.keras.mixed_precision.set_global_policy("mixed_float16")
+
+# ================= DATASETS =================
+train_ds = tf.keras.utils.image_dataset_from_directory(
+    DATA_DIR,
+    validation_split=0.2,
+    subset="training",
+    seed=SEED,
+    image_size=IMG_SIZE,
+    batch_size=BATCH_SIZE,
+    label_mode="int",          # ✅ MULTICLASS
+    shuffle=True
+)
+
+val_ds = tf.keras.utils.image_dataset_from_directory(
+    DATA_DIR,
+    validation_split=0.2,
+    subset="validation",
+    seed=SEED,
+    image_size=IMG_SIZE,
+    batch_size=BATCH_SIZE,
+    label_mode="int",
+    shuffle=False
+)
+
+class_names = train_ds.class_names
+NUM_CLASSES = len(class_names)
+
+print("📂 Class order used by model:", class_names)
+
+# ================= NORMALIZATION =================
+normalization_layer = tf.keras.layers.Rescaling(1.0 / 255)
+
+train_ds = train_ds.map(lambda x, y: (normalization_layer(x), y))
+val_ds   = val_ds.map(lambda x, y: (normalization_layer(x), y))
+
+train_ds = train_ds.prefetch(tf.data.AUTOTUNE)
+val_ds   = val_ds.prefetch(tf.data.AUTOTUNE)
+
+# ================= MODEL =================
+model = tf.keras.Sequential([
+    tf.keras.layers.Input(shape=(100, 100, 3)),
+
+    tf.keras.layers.Conv2D(32, 3, activation="relu", padding="same"),
+    tf.keras.layers.MaxPooling2D(),
+
+    tf.keras.layers.Conv2D(64, 3, activation="relu", padding="same"),
+    tf.keras.layers.MaxPooling2D(),
+
+    tf.keras.layers.Conv2D(128, 3, activation="relu", padding="same"),
+    tf.keras.layers.MaxPooling2D(),
+
+    tf.keras.layers.Flatten(),
+    tf.keras.layers.Dense(128, activation="relu"),
+    tf.keras.layers.Dropout(0.5),
+
+    # 🔥 4-CLASS OUTPUT (float32 for mixed precision safety)
+    tf.keras.layers.Dense(NUM_CLASSES, activation="softmax", dtype="float32")
+])
+
+model.compile(
+    optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4),
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"]
+)
+
+model.summary()
+
+# ================= CALLBACKS =================
+callbacks = [
+    tf.keras.callbacks.ModelCheckpoint(
+        "best_engagement_model.h5",
+        monitor="val_accuracy",
+        save_best_only=True,
+        verbose=1
+    ),
+    tf.keras.callbacks.EarlyStopping(
+        monitor="val_loss",
+        patience=5,
+        restore_best_weights=True
+    )
+]
+
+# ================= TRAIN =================
+history = model.fit(
+    train_ds,
+    validation_data=val_ds,
+    epochs=EPOCHS,
+    callbacks=callbacks
+)
+
+# ================= EVALUATION =================
+loss, acc = model.evaluate(val_ds, verbose=0)
+print(f"\n🎯 Validation Accuracy: {acc * 100:.2f}%")
+
+# ================= CONFUSION MATRIX =================
+y_true = []
+y_pred = []
+
+for images, labels in val_ds:
+    preds = model.predict(images, verbose=0)
+    preds = np.argmax(preds, axis=1)
+
+    y_true.extend(labels.numpy())
+    y_pred.extend(preds)
+
+cm = confusion_matrix(y_true, y_pred)
+
+print("\n📊 Confusion Matrix:")
+print(cm)
+
+print("\n📋 Classification Report:")
+print(classification_report(
+    y_true,
+    y_pred,
+    target_names=class_names
+))
+
+np.savetxt("confusion_matrix.txt", cm, fmt="%d")
+
+
+
+
+
+
+
+
+
 # # import os
 # # import tensorflow as tf
 # # import numpy as np
@@ -451,137 +593,3 @@
 # # =========================
 # torch.save(model.state_dict(), "engagement_model.pth")
 # print("Model saved as engagement_model.pth")
-
-import tensorflow as tf
-import numpy as np
-from sklearn.metrics import confusion_matrix, classification_report
-
-# ================= CONFIG =================
-DATA_DIR = "engagement_4class"   # ✅ ROOT FOLDER
-IMG_SIZE = (100, 100)
-BATCH_SIZE = 32
-EPOCHS = 1
-SEED = 42
-
-print("🚀 GPUs Available:", tf.config.list_physical_devices("GPU"))
-
-# ================= MIXED PRECISION =================
-tf.keras.mixed_precision.set_global_policy("mixed_float16")
-
-# ================= DATASETS =================
-train_ds = tf.keras.utils.image_dataset_from_directory(
-    DATA_DIR,
-    validation_split=0.2,
-    subset="training",
-    seed=SEED,
-    image_size=IMG_SIZE,
-    batch_size=BATCH_SIZE,
-    label_mode="int",          # ✅ MULTICLASS
-    shuffle=True
-)
-
-val_ds = tf.keras.utils.image_dataset_from_directory(
-    DATA_DIR,
-    validation_split=0.2,
-    subset="validation",
-    seed=SEED,
-    image_size=IMG_SIZE,
-    batch_size=BATCH_SIZE,
-    label_mode="int",
-    shuffle=False
-)
-
-class_names = train_ds.class_names
-NUM_CLASSES = len(class_names)
-
-print("📂 Class order used by model:", class_names)
-
-# ================= NORMALIZATION =================
-normalization_layer = tf.keras.layers.Rescaling(1.0 / 255)
-
-train_ds = train_ds.map(lambda x, y: (normalization_layer(x), y))
-val_ds   = val_ds.map(lambda x, y: (normalization_layer(x), y))
-
-train_ds = train_ds.prefetch(tf.data.AUTOTUNE)
-val_ds   = val_ds.prefetch(tf.data.AUTOTUNE)
-
-# ================= MODEL =================
-model = tf.keras.Sequential([
-    tf.keras.layers.Input(shape=(100, 100, 3)),
-
-    tf.keras.layers.Conv2D(32, 3, activation="relu", padding="same"),
-    tf.keras.layers.MaxPooling2D(),
-
-    tf.keras.layers.Conv2D(64, 3, activation="relu", padding="same"),
-    tf.keras.layers.MaxPooling2D(),
-
-    tf.keras.layers.Conv2D(128, 3, activation="relu", padding="same"),
-    tf.keras.layers.MaxPooling2D(),
-
-    tf.keras.layers.Flatten(),
-    tf.keras.layers.Dense(128, activation="relu"),
-    tf.keras.layers.Dropout(0.5),
-
-    # 🔥 4-CLASS OUTPUT (float32 for mixed precision safety)
-    tf.keras.layers.Dense(NUM_CLASSES, activation="softmax", dtype="float32")
-])
-
-model.compile(
-    optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4),
-    loss="sparse_categorical_crossentropy",
-    metrics=["accuracy"]
-)
-
-model.summary()
-
-# ================= CALLBACKS =================
-callbacks = [
-    tf.keras.callbacks.ModelCheckpoint(
-        "best_engagement_model.h5",
-        monitor="val_accuracy",
-        save_best_only=True,
-        verbose=1
-    ),
-    tf.keras.callbacks.EarlyStopping(
-        monitor="val_loss",
-        patience=5,
-        restore_best_weights=True
-    )
-]
-
-# ================= TRAIN =================
-history = model.fit(
-    train_ds,
-    validation_data=val_ds,
-    epochs=EPOCHS,
-    callbacks=callbacks
-)
-
-# ================= EVALUATION =================
-loss, acc = model.evaluate(val_ds, verbose=0)
-print(f"\n🎯 Validation Accuracy: {acc * 100:.2f}%")
-
-# ================= CONFUSION MATRIX =================
-y_true = []
-y_pred = []
-
-for images, labels in val_ds:
-    preds = model.predict(images, verbose=0)
-    preds = np.argmax(preds, axis=1)
-
-    y_true.extend(labels.numpy())
-    y_pred.extend(preds)
-
-cm = confusion_matrix(y_true, y_pred)
-
-print("\n📊 Confusion Matrix:")
-print(cm)
-
-print("\n📋 Classification Report:")
-print(classification_report(
-    y_true,
-    y_pred,
-    target_names=class_names
-))
-
-np.savetxt("confusion_matrix.txt", cm, fmt="%d")
